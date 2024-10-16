@@ -282,14 +282,26 @@ export {
 import { cleanupGlobalTrace, registerGlobalTrace } from "@rspack/binding";
 interface Experiments {
 	globalTrace: {
-		register: typeof registerGlobalTrace;
-		cleanup: typeof cleanupGlobalTrace;
+		register: (
+			filter: string,
+			layer: "chrome" | "logger" | "console" | "otel",
+			output: string
+		) => Promise<void>;
+		cleanup: () => Promise<void>;
 	};
 }
 
 export const experiments: Experiments = {
 	globalTrace: {
-		register: registerGlobalTrace,
-		cleanup: cleanupGlobalTrace
+		async register(...args) {
+			registerGlobalTrace(...args);
+			const { initOpenTelemetry } = await import("@rspack/tracing");
+			await initOpenTelemetry();
+		},
+		async cleanup() {
+			cleanupGlobalTrace();
+			const { shutdownOpenTelemetry } = await import("@rspack/tracing");
+			await shutdownOpenTelemetry();
+		}
 	}
 };

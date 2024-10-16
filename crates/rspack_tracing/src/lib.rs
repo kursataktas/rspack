@@ -5,11 +5,18 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use tracing::level_filters::LevelFilter;
 use tracing::Level;
 use tracing_chrome::FlushGuard;
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
 use tracing_subscriber::{fmt::format::FmtSpan, layer::Filter};
 use tracing_subscriber::{EnvFilter, Layer};
+
+pub mod otel {
+  pub use opentelemetry;
+  pub use opentelemetry_sdk as sdk;
+  pub use tracing_opentelemetry as tracing;
+}
 
 pub mod chrome {
   pub use tracing_chrome::FlushGuard;
@@ -30,6 +37,52 @@ impl<S> Filter<S> for FilterEvent {
   }
 }
 
+pub struct OtelGuard {
+  trace_provider: opentelemetry_sdk::trace::TracerProvider,
+}
+
+impl Drop for OtelGuard {
+  fn drop(&mut self) {
+    let _ = self.trace_provider.shutdown();
+    opentelemetry::global::shutdown_tracer_provider();
+  }
+}
+
+pub fn enable_tracing_by_env_with_otel(filter: &str) -> Option<OtelGuard> {
+  if !IS_TRACING_ENABLED.swap(true, Ordering::Relaxed) {
+    use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
+    use opentelemetry_sdk::propagation::TraceContextPropagator;
+    use opentelemetry_sdk::{runtime, Resource};
+    use tracing_opentelemetry::OpenTelemetryLayer;
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
+    let provider =
+      opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+        .with_trace_config(opentelemetry_sdk::trace::Config::default().with_resource(
+          Resource::new(vec![KeyValue::new("service.name", "rspack-app")]),
+        ))
+        .install_batch(runtime::Tokio)
+        .unwrap();
+    global::set_tracer_provider(provider.clone());
+
+    let trace = provider.tracer("rspack-app");
+    dbg!(filter);
+
+    tracing_subscriber::registry()
+      .with(generate_common_layers(filter))
+      .with(OpenTelemetryLayer::new(trace))
+      .init();
+    return Some(OtelGuard {
+      trace_provider: provider,
+    });
+  }
+  None
+}
+
 pub fn enable_tracing_by_env(filter: &str, output: &str) {
   if !IS_TRACING_ENABLED.swap(true, Ordering::Relaxed) {
     use tracing_subscriber::{fmt, prelude::*};
@@ -37,7 +90,6 @@ pub fn enable_tracing_by_env(filter: &str, output: &str) {
     let trace_writer = TraceWriter::from(output);
 
     tracing_subscriber::registry()
-      // .with(EnvFilter::from_env("TRACE").and_then(rspack_only_layer))
       .with(layers)
       .with(
         fmt::layer()
@@ -61,14 +113,12 @@ fn generate_common_layers(
   if let Some(default_level) = default_level {
     layers.push(
       tracing_subscriber::filter::Targets::new()
-        .with_targets(vec![
-          ("rspack_core", default_level),
-          ("rspack", default_level),
-          ("rspack_node", default_level),
-          ("rspack_plugin_javascript", default_level),
-          ("rspack_plugin_split_chunks", default_level),
-          ("rspack_binding_options", default_level),
-        ])
+        .with_target("rspack_core", default_level)
+        .with_target("node_binding", default_level)
+        .with_target("rspack_loader_swc", default_level)
+        .with_target("rspack_loader_runner", default_level)
+        .with_target("rspack_plugin_javascript", default_level)
+        .with_target("rspack_resolver", Level::WARN)
         .boxed(),
     );
   } else {

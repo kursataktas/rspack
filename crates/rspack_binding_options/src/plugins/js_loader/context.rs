@@ -7,6 +7,8 @@ use rspack_core::{LoaderContext, RunnerContext};
 use rspack_error::error;
 use rspack_loader_runner::{LoaderItem, State as LoaderState};
 use rspack_napi::threadsafe_js_value_ref::ThreadsafeJsValueRef;
+use rspack_tracing::otel::{opentelemetry::global, tracing::OpenTelemetrySpanExt as _};
+use tracing::Span;
 
 #[napi(object)]
 pub struct JsLoaderItem {
@@ -81,6 +83,8 @@ pub struct JsLoaderContext {
   pub loader_index: i32,
   #[napi(ts_type = "Readonly<JsLoaderState>")]
   pub loader_state: JsLoaderState,
+
+  pub carrier: Option<HashMap<String, String>>,
 }
 
 impl TryFrom<&mut LoaderContext<RunnerContext>> for JsLoaderContext {
@@ -89,6 +93,11 @@ impl TryFrom<&mut LoaderContext<RunnerContext>> for JsLoaderContext {
   fn try_from(
     cx: &mut rspack_core::LoaderContext<RunnerContext>,
   ) -> std::result::Result<Self, Self::Error> {
+    let mut carrier = HashMap::new();
+    global::get_text_map_propagator(|propagator| {
+      let cx = Span::current().context();
+      propagator.inject_context(&cx, &mut carrier);
+    });
     Ok(JsLoaderContext {
       resource_data: cx.resource_data.as_ref().into(),
       module_identifier: cx.context.module.module_identifier.to_string(),
@@ -139,6 +148,7 @@ impl TryFrom<&mut LoaderContext<RunnerContext>> for JsLoaderContext {
       loader_items: cx.loader_items.iter().map(Into::into).collect(),
       loader_index: cx.loader_index,
       loader_state: cx.state().into(),
+      carrier: Some(carrier),
     })
   }
 }
