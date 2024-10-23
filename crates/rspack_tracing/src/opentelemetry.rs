@@ -1,5 +1,5 @@
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
-use opentelemetry_sdk::{runtime, Resource};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, runtime, Resource};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -33,6 +33,7 @@ impl OtelTracer {
 
 impl Tracer for OtelTracer {
   fn setup(&mut self, filter_layers: FilterLayers, _output: &str) {
+    global::set_text_map_propagator(TraceContextPropagator::new());
     global::set_tracer_provider(self.provider.clone());
     let trace = self.provider.tracer("rspack-app");
     tracing_subscriber::registry()

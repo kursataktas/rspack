@@ -657,7 +657,7 @@ export interface JsLoaderContext {
   loaderItems: Array<JsLoaderItem>
   loaderIndex: number
   loaderState: Readonly<JsLoaderState>
-  carrier?: Record<string, string>
+  __internal__tracingCarrier?: Record<string, string>
 }
 
 export interface JsLoaderItem {

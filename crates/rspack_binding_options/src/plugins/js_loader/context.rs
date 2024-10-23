@@ -84,6 +84,7 @@ pub struct JsLoaderContext {
   #[napi(ts_type = "Readonly<JsLoaderState>")]
   pub loader_state: JsLoaderState,
 
+  #[napi(js_name = "__internal__tracingCarrier")]
   pub carrier: Option<HashMap<String, String>>,
 }
 

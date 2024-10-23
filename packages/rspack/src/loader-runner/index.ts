@@ -352,7 +352,7 @@ export async function runLoaders(
 	let tracer = trace.getTracer("rspack-loader-runner");
 	let activeContext = propagation.extract(
 		tracingContext.active(),
-		context.carrier
+		context.__internal__tracingCarrier
 	);
 
 	const loaderState = context.loaderState;
