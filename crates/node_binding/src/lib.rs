@@ -26,6 +26,9 @@ use plugins::*;
 use resolver_factory::*;
 use rspack_binding_options::*;
 use rspack_binding_values::*;
+use rspack_tracing::{
+  generate_common_layers, ChromeTracer, OtelTracer, StdoutTracer, TokioConsoleTracer, Tracer,
+};
 
 #[napi]
 pub struct Rspack {
@@ -193,27 +196,9 @@ fn concurrent_compiler_error() -> Error {
   )
 }
 
-enum FlushGuard {
-  Chrome(Option<rspack_tracing::chrome::FlushGuard>),
-  Otel(Option<rspack_tracing::OtelGuard>),
-}
-
-impl Drop for FlushGuard {
-  fn drop(&mut self) {
-    match self {
-      FlushGuard::Chrome(flush_guard) => {
-        flush_guard.take().map(|g| {
-          g.flush();
-        });
-      }
-      FlushGuard::Otel(otel_guard) => drop(otel_guard.take()),
-    }
-  }
-}
-
 #[derive(Default)]
 enum TraceState {
-  On(Option<FlushGuard>),
+  On(Box<dyn Tracer>),
   #[default]
   Off,
 }
@@ -229,7 +214,9 @@ fn print_error_diagnostic(e: rspack_error::Error, colored: bool) -> String {
     .expect("should print diagnostics")
 }
 
-static GLOBAL_TRACE_STATE: Mutex<TraceState> = Mutex::new(TraceState::Off);
+thread_local! {
+  static GLOBAL_TRACE_STATE: Mutex<TraceState> = Mutex::new(TraceState::Off);
+}
 
 /**
  * Some code is modified based on
@@ -243,43 +230,37 @@ pub fn register_global_trace(
   filter: String,
   #[napi(ts_arg_type = "\"chrome\" | \"logger\"| \"console\" | \"otel\"")] layer: String,
   output: String,
-) {
-  let mut state = GLOBAL_TRACE_STATE
-    .lock()
-    .expect("Failed to lock GLOBAL_TRACE_STATE");
-  if matches!(&*state, TraceState::Off) {
-    let guard = match layer.as_str() {
-      "chrome" => Some(FlushGuard::Chrome(
-        rspack_tracing::enable_tracing_by_env_with_chrome_layer(&filter, &output),
-      )),
-      "otel" => Some(FlushGuard::Otel(
-        rspack_tracing::enable_tracing_by_env_with_otel(&filter),
-      )),
-      "console" => {
-        rspack_tracing::enable_tracing_by_env_with_tokio_console();
-        None
-      }
-      "logger" => {
-        rspack_tracing::enable_tracing_by_env(&filter, &output);
-        None
-      }
-      _ => panic!("not supported layer type:{layer}"),
-    };
-    let new_state = TraceState::On(guard);
-    *state = new_state;
-  }
+) -> anyhow::Result<()> {
+  GLOBAL_TRACE_STATE.with(|state| {
+    let mut state = state.lock().expect("Failed to lock GLOBAL_TRACE_STATE");
+    if let TraceState::Off = *state {
+      let mut tracer: Box<dyn Tracer> = match layer.as_str() {
+        "chrome" => Box::new(ChromeTracer::default()),
+        "otel" => Box::new(OtelTracer::default()),
+        "console" => Box::new(TokioConsoleTracer),
+        "logger" => Box::new(StdoutTracer),
+        _ => anyhow::bail!(
+          "Unexpected layer: {}, supported layers: 'chrome', 'logger', 'console' and 'otel' ",
+          layer
+        ),
+      };
+      eprintln!("Global trace enabled:");
+      eprintln!(" - layer: {}", layer);
+      tracer.setup(generate_common_layers(&filter), &output);
+      let new_state = TraceState::On(tracer);
+      *state = new_state;
+    }
+    Ok(())
+  })
 }
 
 #[napi]
 pub fn cleanup_global_trace() {
-  let mut state = GLOBAL_TRACE_STATE
-    .lock()
-    .expect("Failed to lock GLOBAL_TRACE_STATE");
-  if let TraceState::On(guard) = &mut *state
-    && let Some(g) = guard.take()
-  {
-    drop(g);
-    let new_state = TraceState::Off;
-    *state = new_state;
-  }
+  GLOBAL_TRACE_STATE.with(|state| {
+    let mut state = state.lock().expect("Failed to lock GLOBAL_TRACE_STATE");
+    if let TraceState::On(ref mut tracer) = *state {
+      tracer.teardown();
+    }
+    *state = TraceState::Off;
+  });
 }

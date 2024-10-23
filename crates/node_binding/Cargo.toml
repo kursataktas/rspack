@@ -14,6 +14,7 @@ default = []
 plugin  = ["rspack_binding_options/plugin"]
 
 [dependencies]
+anyhow                   = { workspace = true }
 ropey                    = { workspace = true }
 rspack_allocator         = { version = "0.1.0", path = "../rspack_allocator" }
 rspack_binding_options   = { version = "0.1.0", path = "../rspack_binding_options" }

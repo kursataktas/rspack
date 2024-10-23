@@ -3789,6 +3789,7 @@ dependencies = [
 name = "rspack_node"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "color-backtrace",
  "cow-utils",

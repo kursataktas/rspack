@@ -8,7 +8,6 @@ use std::{
 
 use dashmap::DashSet;
 use derivative::Derivative;
-use futures::future::Shared;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use rayon::prelude::*;

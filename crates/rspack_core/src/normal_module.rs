@@ -10,7 +10,6 @@ use std::{
 
 use dashmap::DashMap;
 use derivative::Derivative;
-use itertools::Itertools as _;
 use rspack_collections::{Identifiable, IdentifierSet};
 use rspack_error::{error, Diagnosable, Diagnostic, DiagnosticExt, NodeError, Result, Severity};
 use rspack_hash::{RspackHash, RspackHashDigest};

@@ -1035,6 +1035,13 @@ export interface JsTap {
   stage: number
 }
 
+export interface NodeFS {
+  writeFile: (...args: any[]) => any
+  removeFile: (...args: any[]) => any
+  mkdir: (...args: any[]) => any
+  mkdirp: (...args: any[]) => any
+}
+
 export interface PathWithInfo {
   path: string
   info: JsAssetInfo
@@ -1997,5 +2004,13 @@ export interface RegisterJsTaps {
   registerHtmlPluginAfterTemplateExecutionTaps: (stages: Array<number>) => Array<{ function: ((arg: JsAfterTemplateExecutionData) => JsAfterTemplateExecutionData); stage: number; }>
   registerHtmlPluginBeforeEmitTaps: (stages: Array<number>) => Array<{ function: ((arg: JsBeforeEmitData) => JsBeforeEmitData); stage: number; }>
   registerHtmlPluginAfterEmitTaps: (stages: Array<number>) => Array<{ function: ((arg: JsAfterEmitData) => JsAfterEmitData); stage: number; }>
+}
+
+export interface ThreadsafeNodeFS {
+  writeFile: (name: string, content: Buffer) => Promise<void> | void
+  removeFile: (name: string) => Promise<void> | void
+  mkdir: (name: string) => Promise<void> | void
+  mkdirp: (name: string) => Promise<string | void> | string | void
+  removeDirAll: (name: string) => Promise<string | void> | string | void
 }
 
