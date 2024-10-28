@@ -31,6 +31,7 @@ use super::{
 };
 use crate::{
   build_chunk_graph::build_chunk_graph,
+  cache::Cache,
   cgm_hash_results::CgmHashResults,
   cgm_runtime_requirement_results::CgmRuntimeRequirementsResults,
   get_chunk_from_ukey, get_mut_chunk_from_ukey,
@@ -176,6 +177,7 @@ pub struct Compilation {
   pub built_modules: IdentifierSet,
   pub code_generated_modules: IdentifierSet,
   pub build_time_executed_modules: IdentifierSet,
+  pub cache: Arc<Cache>,
   pub old_cache: Arc<OldCache>,
   pub code_splitting_cache: CodeSplittingCache,
   pub incremental: Incremental,
@@ -230,6 +232,7 @@ impl Compilation {
     resolver_factory: Arc<ResolverFactory>,
     loader_resolver_factory: Arc<ResolverFactory>,
     records: Option<CompilationRecords>,
+    cache: Arc<Cache>,
     old_cache: Arc<OldCache>,
     module_executor: Option<ModuleExecutor>,
     modified_files: HashSet<PathBuf>,
@@ -273,6 +276,7 @@ impl Compilation {
       built_modules: Default::default(),
       code_generated_modules: Default::default(),
       build_time_executed_modules: Default::default(),
+      cache,
       old_cache,
       incremental,
       code_splitting_cache: Default::default(),

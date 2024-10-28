@@ -3,6 +3,8 @@ mod entry;
 mod execute;
 mod overwrite;
 
+use std::sync::Arc;
+
 use dashmap::DashMap;
 use dashmap::{mapref::entry::Entry, DashSet};
 pub use execute::ExecuteModuleId;
@@ -20,6 +22,7 @@ use self::{
   overwrite::OverwriteTask,
 };
 use super::make::{repair::MakeTaskContext, update_module_graph, MakeArtifact, MakeParam};
+use crate::cache::Cache;
 use crate::incremental::Mutation;
 use crate::{
   task_loop::run_task_loop_with_event, Compilation, CompilationAsset, Context, Dependency,
@@ -66,7 +69,11 @@ impl ModuleExecutor {
 
     make_artifact = update_module_graph(compilation, make_artifact, params).unwrap_or_default();
 
-    let mut ctx = MakeTaskContext::new(compilation, make_artifact);
+    let mut ctx = MakeTaskContext::new(
+      compilation,
+      make_artifact,
+      Arc::new(Cache::new(compilation.options.clone())),
+    );
     let (event_sender, event_receiver) = unbounded_channel();
     let (stop_sender, stop_receiver) = oneshot::channel();
     self.event_sender = Some(event_sender.clone());

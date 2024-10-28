@@ -1,2 +1,1 @@
-#[derive(Debug, Clone, Default)]
-pub struct SnapshotOptions;
+pub use crate::cache::snapshot::{PathMatcher, SnapshotOptions};

@@ -1838,7 +1838,9 @@ export interface RawSizeLimitsPluginOptions {
 }
 
 export interface RawSnapshotOptions {
-
+  immutablePaths: Array<RawPathMatcher>
+  unmanagedPaths: Array<RawPathMatcher>
+  managedPaths: Array<RawPathMatcher>
 }
 
 export interface RawSourceMapDevToolPluginOptions {

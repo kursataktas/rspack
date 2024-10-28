@@ -70,6 +70,7 @@ impl Compiler {
         self.resolver_factory.clone(),
         self.loader_resolver_factory.clone(),
         Some(records),
+        self.cache.clone(),
         self.old_cache.clone(),
         Some(ModuleExecutor::default()),
         modified_files,
