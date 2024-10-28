@@ -41,6 +41,7 @@ rspack_paths = { version = "0.1.0", path = "../rspack_paths" }
 rspack_regex = { version = "0.1.0", path = "../rspack_regex" }
 rspack_resolver = { workspace = true }
 rspack_sources = { workspace = true }
+rspack_storage = { version = "0.1.0", path = "../rspack_storage" }
 rspack_util = { version = "0.1.0", path = "../rspack_util" }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
