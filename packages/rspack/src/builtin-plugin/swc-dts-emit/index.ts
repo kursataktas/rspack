@@ -1,0 +1,31 @@
+import {
+	BuiltinPluginName,
+	type RawSwcDtsEmitRspackPluginOptions
+} from "@rspack/binding";
+import { Compiler } from "../../Compiler";
+
+export interface SwcDtsEmitRspackPluginOptions {
+	rootDir: string;
+	outDir?: string;
+	include?: string;
+	mode?: string;
+}
+
+export class SwcDtsEmitRspackPlugin {
+	options: SwcDtsEmitRspackPluginOptions;
+	constructor(options: SwcDtsEmitRspackPluginOptions) {
+		this.options = options;
+	}
+	apply(compiler: Compiler) {
+		compiler.__internal__registerBuiltinPlugin({
+			name: BuiltinPluginName.SwcDtsEmitRspackPlugin,
+			options: this.options
+		});
+	}
+	normalizeOptions(
+		options: SwcDtsEmitRspackPluginOptions
+	): RawSwcDtsEmitRspackPluginOptions {
+		const normalzedOptions: RawSwcDtsEmitRspackPluginOptions = options;
+		return normalzedOptions;
+	}
+}
