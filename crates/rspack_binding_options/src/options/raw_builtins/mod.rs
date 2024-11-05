@@ -496,8 +496,8 @@ impl BuiltinPlugin {
         plugins.push(plugin);
       }
       BuiltinPluginName::SwcDtsEmitRspackPlugin => {
-        let plugin = rspack_loader_swc::PluginSwcDtsEmit::new(
-          downcast_into::<RawSwcDtsEmitRspackPluginOptions>(self.options)?.try_into()?,
+        let plugin = rspack_plugin_emit_dts::SwcDtsEmitRspackPlugin::new(
+          downcast_into::<RawSwcDtsEmitRspackPluginOptions>(self.options)?.into(),
         )
         .boxed();
         plugins.push(plugin);

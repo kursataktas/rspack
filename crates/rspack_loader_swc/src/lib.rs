@@ -2,7 +2,6 @@
 
 mod compiler;
 mod options;
-mod plugin;
 mod transformer;
 
 use std::default::Default;
@@ -11,10 +10,11 @@ use std::sync::Arc;
 use compiler::{IntoJsAst, SwcCompiler};
 use options::SwcCompilerOptionsWithAdditional;
 pub use options::SwcLoaderJsOptions;
-pub use plugin::{PluginSwcDtsEmit, SwcDtsEmitOptions};
 use rspack_core::{rspack_sources::SourceMap, Mode, RunnerContext};
 use rspack_error::{error, AnyhowError, Diagnostic, Result};
 use rspack_loader_runner::{Identifiable, Identifier, Loader, LoaderContext};
+use rspack_paths::Utf8PathBuf;
+use rspack_plugin_emit_dts::SwcDtsEmitOptions;
 use rspack_plugin_javascript::ast::{self, SourceMapConfig};
 use rspack_plugin_javascript::TransformOutput;
 use rspack_util::source_map::SourceMapKind;
@@ -53,6 +53,8 @@ impl SwcLoader {
       .resource_path()
       .map(|p| p.to_path_buf())
       .unwrap_or_default();
+
+    let filename = resource_path.as_str().to_string();
     let Some(content) = loader_context.take_content() else {
       return Ok(());
     };
@@ -74,8 +76,8 @@ impl SwcLoader {
           swc_options.config.input_source_map = Some(InputSourceMap::Str(source_map))
         }
       }
-      swc_options.filename = resource_path.as_str().to_string();
-      swc_options.source_file_name = Some(resource_path.as_str().to_string());
+      swc_options.filename = filename.clone();
+      swc_options.source_file_name = Some(filename.clone());
 
       if swc_options.config.jsc.target.is_some() && swc_options.config.env.is_some() {
         loader_context.emit_diagnostic(Diagnostic::warn(
@@ -85,8 +87,6 @@ impl SwcLoader {
       }
       swc_options
     };
-
-    let filename = swc_options.filename.clone();
 
     let source_map_kind: SourceMapKind = match swc_options.config.source_maps {
       Some(SourceMapsConfig::Bool(false)) => SourceMapKind::empty(),
@@ -128,25 +128,88 @@ impl SwcLoader {
       inline_script: Some(false),
       keep_comments: Some(true),
     };
-    let emit_dts = built.syntax.typescript() && built.emit_isolated_dts;
+
+    // let emit_dts = built.syntax.typescript() && built.emit_isolated_dts;
+    let emit_dts = built.syntax.typescript()
+      && self
+        .options_with_additional
+        .rspack_experiments
+        .emit_dts
+        .is_some();
 
     let program = &built.program;
+
     if emit_dts && program.is_module() {
       let mut module = program.clone().expect_module();
       let mut checker = FastDts::new(Arc::new(swc_core::common::FileName::Custom(
         filename.clone(),
       )));
-      let issues = checker.transform(&mut module);
-      if issues.len() > 0 {
-        return error!(issues);
-      }
+      let SwcDtsEmitOptions {
+        abort_on_error,
+        include,
+        out_dir,
+        root_dir,
+        emit,
+      } = self
+        .options_with_additional
+        .rspack_experiments
+        .emit_dts
+        .as_ref()
+        .expect("never reach");
 
-      let dts_code = to_code_with_comments(Some(&built.comments), &module);
-      loader_context
-        .parse_meta
-        .entry(String::from("swc-dts-emit-plugin") + &filename[..])
-        .and_modify(|v| v.push_str(&dts_code))
-        .or_insert(dts_code);
+      let root_dir = Utf8PathBuf::from(root_dir);
+      let dts_filename: Option<Utf8PathBuf> = {
+        let filename = Utf8PathBuf::from(&filename);
+        if let Ok(output_relative_path) = filename.strip_prefix(root_dir) {
+          dbg!(&filename, &output_relative_path);
+          // let output_relative_path = Utf8PathBuf::from(output_relative_path);
+          let output_filename = Utf8PathBuf::from(out_dir.clone()).join(output_relative_path);
+          Some(output_filename)
+        } else {
+          None
+        }
+      };
+
+      if let Some(dts_filename) = dts_filename {
+        let issues = checker.transform(&mut module);
+        let should_abort = *abort_on_error && !issues.is_empty();
+
+        if should_abort {
+          let error: Vec<String> = issues.iter().map(|e| e.to_string()).collect();
+          let error = error.concat();
+          return Err(error!(
+            "Failed to generate dts code in {}, {}",
+            SWC_LOADER_IDENTIFIER.to_string(),
+            error
+          ));
+        } else {
+          issues.into_iter().for_each(|issue| {
+            loader_context.emit_diagnostic(Diagnostic::error(
+              SWC_LOADER_IDENTIFIER.to_string(),
+              issue.to_string(),
+            ))
+          });
+        }
+
+        if *emit {
+          let dts_code = to_code_with_comments(Some(&built.comments), &module);
+          loader_context
+            .parse_meta
+            .entry("swc-dts-emit-plugin-filename".to_string())
+            .and_modify(|v| *v = filename.clone())
+            .or_insert(filename.clone());
+          loader_context
+            .parse_meta
+            .entry("swc-dts-emit-plugin-dts-filename".to_string())
+            .and_modify(|v| *v = dts_filename.to_string())
+            .or_insert(dts_filename.to_string());
+          loader_context
+            .parse_meta
+            .entry("swc-dts-emit-plugin-dts-code".to_string())
+            .and_modify(|v| v.push_str(&dts_code))
+            .or_insert(dts_code);
+        }
+      }
     }
 
     let program = tokio::task::block_in_place(|| c.transform(built).map_err(AnyhowError::from))?;

@@ -1898,10 +1898,7 @@ export interface RawStatsOptions {
 }
 
 export interface RawSwcDtsEmitRspackPluginOptions {
-  rootDir?: string
-  outDir?: string
-  include?: string
-  mode?: string
+  extension?: string
 }
 
 export interface RawSwcJsMinimizerOptions {
